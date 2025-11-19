@@ -9,8 +9,13 @@ namespace Invert.Api.Data.Config
         public void Configure(EntityTypeBuilder<Article> builder)
         {
             builder.ToTable("Articles");
+            //  Navigation properties
 
-            builder.HasKey(a => a.Id);
+            builder.HasOne<AppUser>(a => a.AppUser)   // navigation property
+               .WithMany(u => u.Articles)             // collection on user
+               .HasForeignKey(a => a.UserId)
+               .HasPrincipalKey(u => u.Id)
+               .OnDelete(DeleteBehavior.SetNull);
 
             builder.Property(a => a.Title)
                 .IsRequired()
@@ -19,12 +24,20 @@ namespace Invert.Api.Data.Config
             builder.Property(a => a.ContentJson)
                 .IsRequired();
 
+
             builder.Property(a => a.CreatedAt)
                 .IsRequired()
                 .HasDefaultValueSql("GETUTCDATE()");
 
             builder.Property(a => a.UpdatedAt)
                 .IsRequired(false);
+
+            builder.Property(a => a.Author)
+                .IsRequired(false);
+
+            builder.Property(a => a.UserId)
+                .IsRequired(false);
+
         }
     }
 }

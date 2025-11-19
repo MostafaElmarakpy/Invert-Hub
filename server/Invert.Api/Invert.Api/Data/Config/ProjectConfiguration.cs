@@ -9,6 +9,13 @@ namespace Invert.Api.Data.Config
         public void Configure(EntityTypeBuilder<Project> builder)
         {
             builder.HasKey(p => p.Id);
+            // Navigation properties
+            builder.HasOne<AppUser>(a => a.AppUser)   // navigation property
+               .WithMany(u => u.Projects)             // collection on user
+               .HasForeignKey(a => a.UserId)
+               .HasPrincipalKey(u => u.Id)
+               .OnDelete(DeleteBehavior.SetNull);
+
 
             builder.Property(p => p.Title)
                 .IsRequired()

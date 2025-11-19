@@ -28,6 +28,7 @@ namespace Invert.Api.Data.Config
 
             builder.Property(j => j.Salary)
                 .IsRequired()
+                .HasPrecision(18, 2)
                 .HasMaxLength(50);
 
             builder.Property(j => j.Status)

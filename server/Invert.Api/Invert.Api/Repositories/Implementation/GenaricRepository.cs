@@ -16,9 +16,9 @@ namespace Invert.Api.Repositories.Implementation
             _dbContext = dbContext;
             dbSet = _dbContext.Set<T>();
         }
-        public void Add(T entity)
+        public async Task Add(T entity)
         {
-            dbSet.Add(entity);
+            await dbSet.AddAsync(entity);
         }
 
         public bool Any(Expression<Func<T, bool>> filter)
@@ -26,7 +26,7 @@ namespace Invert.Api.Repositories.Implementation
             return dbSet.Any(filter);
         }
 
-        public T Get(Expression<Func<T, bool>> filter, string? includeProperty = null)
+        public async Task<T> Get(Expression<Func<T, bool>> filter, string? includeProperty = null)
         {
             IQueryable<T> query = dbSet;
             if (filter != null)
@@ -42,10 +42,10 @@ namespace Invert.Api.Repositories.Implementation
                     query = query.Include(include);
                 }
             }
-            return query.FirstOrDefault();
+            return await query.AsNoTracking().FirstOrDefaultAsync();
         }
 
-        public async Task<List<T>> GetAll(Expression<Func<T, bool>>? filter = null, string? includeProperty = null)
+        public async Task<IEnumerable<T>> GetAll(Expression<Func<T, bool>>? filter = null, string? includeProperty = null)
         {
             IQueryable<T> query = dbSet;
             if (filter != null)

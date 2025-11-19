@@ -15,6 +15,8 @@ namespace Invert.Api.Repositories.Implementation
         public IArticleRepository Article { get; private set; }
         public IJobRepository Job { get; private set; }
 
+        public INotificationRepository Notification { get; }
+
 
 
         public UnitOfWork(ApplicationDbContext dbContext)
@@ -24,16 +26,20 @@ namespace Invert.Api.Repositories.Implementation
             User = new UserRepository(_dbContext);
             Article = new ArticleRepository(_dbContext);
             Job = new JobRepository(_dbContext);
+            Notification = new NotificationRepository(_dbContext);
         }
 
-        public void Save()
-        {
-            _dbContext.SaveChanges();
-        }
+
 
         public void Dispose()
         {
             _dbContext.Dispose();
+        }
+
+
+        public async Task<int> Save()
+        {
+            return await _dbContext.SaveChangesAsync();
         }
     }
 }

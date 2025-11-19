@@ -18,83 +18,128 @@ namespace Invert.Api.Services.Implementation
         public ArticleService(IUnitOfWork unitOfWork, ILogger<ArticleService> logger)
         {
             _unitOfWork = unitOfWork;
-
             _logger = logger;
         }
 
         public async Task<Guid> CreateArticleAsync(CreateArticleDto dto)
         {
-            // Validate input
-            if (string.IsNullOrWhiteSpace(dto.Title))
+            try
             {
-                throw new ArgumentException("Title is required.");
+
+                var title = dto.Title;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    throw new ArgumentException("Article must have a title (first header block)");
+                }
+
+                // Create entity
+                var article = new Article(
+                    title: title,
+                    contentJson: dto.ContentJson,
+                    author: dto.Author
+                );
+
+                await _unitOfWork.Article.Add(article);
+                await _unitOfWork.Save();
+
+                _logger.LogInformation("Article created with ID: {ArticleId}", article.Id);
+
+                return article.Id;
             }
-            if (string.IsNullOrWhiteSpace(dto.ContentJson))
+            catch (Exception ex)
             {
-                throw new ArgumentException("ContentJson is required.");
+                _logger.LogError(ex, "Error creating article");
+                throw;
             }
-
-            // Create new article entity
-            var article = new Article(dto.Title, dto.ContentJson);
-
-
-            _unitOfWork.Article.Add(article);
-            _unitOfWork.Save(); // Use async save for better performance
-            return article.Id;
-        }
-
-        public async Task DeleteArticleAsync(Guid id)
-        {
-            // Delete article by id
-            var article = _unitOfWork.Article.Get(a => a.Id == id);
-            if (article == null) throw new KeyNotFoundException($"Article with id {id} not found");
-            _unitOfWork.Article.Remove(article);
-            _unitOfWork.Save();
         }
 
         public async Task<IEnumerable<ArticleDto>> GetAllAsync()
         {
-            // Get all articles
-            var articles = await _unitOfWork.Article.GetAll();
-            var articleDtos = articles.Select(a => new ArticleDto
+            try
             {
-                Id = a.Id,
-                Title = a.Title,
-                ContentJson = a.ContentJson,
-                CreatedAt = a.CreatedAt
-            });
-            return articleDtos;
+                var articles = await _unitOfWork.Article.GetAll();
+
+                return articles.Select(ArticleDto.FromEntity).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving all articles");
+                throw;
+            }
         }
 
         public async Task<ArticleDto?> GetByIdAsync(Guid id)
         {
-            // Get article by id
-            var article = _unitOfWork.Article.Get(a => a.Id == id);
-            if (article == null) return null;
-            return new ArticleDto
+            try
             {
-                Id = article.Id,
-                Title = article.Title,
-                ContentJson = article.ContentJson,
-                CreatedAt = article.CreatedAt
-            };
+                var article = await _unitOfWork.Article.Get(a => a.Id == id);
+
+                if (article == null)
+                {
+                    _logger.LogWarning("Article with ID {ArticleId} not found", id);
+                    return null;
+                }
+
+                return ArticleDto.FromEntity(article);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving article {ArticleId}", id);
+                throw;
+            }
         }
 
         public async Task UpdateArticleAsync(Guid id, UpdateArticleDto dto)
         {
-            // Update article by id
-            var article = _unitOfWork.Article.Get(a => a.Id == id);
-            if (article == null) throw new KeyNotFoundException($"Article with id {id} not found");
+            try
+            {
+                var article = await _unitOfWork.Article.Get(a => a.Id == id);
 
-            if (!string.IsNullOrEmpty(dto.Title))
-                article.UpdateTitle(dto.Title); // Assuming UpdateTitle is a method in Entity to handle title updates
+                if (article == null)
+                {
+                    throw new KeyNotFoundException($"Article with ID {id} not found");
+                }
 
-            if (!string.IsNullOrEmpty(dto.ContentJson))
-                article.UpdateContent(dto.ContentJson); // Assuming UpdateContent is a method in Entity to handle JSON updates
+                // Update using entity method
+                article.Update(
+                    title: dto.Title,
+                    contentJson: dto.ContentJson,
+                    author: dto.Author
+                );
 
+                _unitOfWork.Article.Update(article);
+                await _unitOfWork.Save();
 
-            _unitOfWork.Article.Update(article);
-            _unitOfWork.Save();
+                _logger.LogInformation("Article {ArticleId} updated successfully", id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating article {ArticleId}", id);
+                throw;
+            }
+        }
+
+        public async Task DeleteArticleAsync(Guid id)
+        {
+            try
+            {
+                var article = await _unitOfWork.Article.Get(a => a.Id == id);
+
+                if (article == null)
+                {
+                    throw new KeyNotFoundException($"Article with ID {id} not found");
+                }
+
+                _unitOfWork.Article.Remove(article);
+                await _unitOfWork.Save();
+
+                _logger.LogInformation("Article {ArticleId} deleted successfully", id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting article {ArticleId}", id);
+                throw;
+            }
         }
     }
 }

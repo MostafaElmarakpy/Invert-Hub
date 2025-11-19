@@ -7,7 +7,6 @@ using Invert.Api.Entities;
 using Invert.Api.Repositories.Implementation;
 using Invert.Api.Repositories.Interface;
 using Invert.Api.Services.Interface;
-using System.Net.NetworkInformation;
 using System.Text.Json;
 
 namespace Invert.Api.Services.Implementation
@@ -27,97 +26,102 @@ namespace Invert.Api.Services.Implementation
 
 
 
-        public Task<int> CreateJobAsync(CreateJobDto dto)
+        public async Task<int> CreateJobAsync(CreateJobDto dto)
         {
-            var job = _mapper.Map<Job>(dto);
-            _unitOfWork.Job.Add(job);
-            _unitOfWork.Save();
-            return Task.FromResult(job.Id);
+            try
+            {
+                var job = _mapper.Map<Job>(dto);
+                job.DatePosted = dto.DatePosted ?? DateTime.UtcNow;
+
+                await _unitOfWork.Job.Add(job);
+                await _unitOfWork.Save();
+
+                _logger.LogInformation("Job created successfully with ID: {JobId}", job.Id);
+                return job.Id;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating job");
+                throw;
+            }
         }
 
 
-        public Task DeleteJobAsync(int id)
-        {
-            var job = _unitOfWork.Job.Get(j => j.Id == id);
-            if (job == null) throw new KeyNotFoundException($"Job with id {id} not found");
-            _unitOfWork.Job.Remove(job);
-            _unitOfWork.Save();
-            return Task.CompletedTask;
-        }
 
         public async Task<IEnumerable<JobDto>> GetAllAsync()
         {
-            var jobs = await _unitOfWork.Job.GetAll();
-            // var jobDtos = _mapper.Map<IEnumerable<JobDto>>(jobs);
-            // mapping manual to handle semicolon separated strings
-            var jobDtos = jobs.Select(job => new JobDto
+            try
             {
-                Id = job.Id,
-                Title = job.Title,
-                Description = job.Description,
-                Location = job.Location,
-                EmploymentType = job.EmploymentType,
-                ExperienceLevel = job.ExperienceLevel,
-                Salary = job.Salary,
-                Status = job.Status,
-                DatePosted = job.DatePosted,
-                ClosingDate = job.ClosingDate,
-                Requirements = string.IsNullOrEmpty(job.Requirements) ? Array.Empty<string>() : job.Requirements.Split(';'),
-                Skills = string.IsNullOrEmpty(job.Skills) ? Array.Empty<string>() : job.Skills.Split(';'),
-                Benefits = string.IsNullOrEmpty(job.Benefits) ? Array.Empty<string>() : job.Benefits.Split(';'),
+                var jobs = await _unitOfWork.Job.GetAll();
+                return _mapper.Map<List<JobDto>>(jobs);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving all jobs");
+                throw;
+            }
 
 
-            }).ToList();
-
-            return jobDtos;
         }
 
-        public Task<JobDto?> GetByIdAsync(int id)
+        public async Task<JobDto?> GetByIdAsync(int id)
         {
-            var job = _unitOfWork.Job.Get(j => j.Id == id);
-            if (job == null) return Task.FromResult<JobDto?>(null);
-            var jobDto = new JobDto
+            try
             {
-                Id = job.Id,
-                Title = job.Title,
-                Description = job.Description,
-                Location = job.Location,
-                EmploymentType = job.EmploymentType,
-                ExperienceLevel = job.ExperienceLevel,
-                Salary = job.Salary,
-                Status = job.Status,
-                DatePosted = job.DatePosted,
-                ClosingDate = job.ClosingDate,
-                Requirements = string.IsNullOrEmpty(job.Requirements) ? Array.Empty<string>() : job.Requirements.Split(';'),
-                Skills = string.IsNullOrEmpty(job.Skills) ? Array.Empty<string>() : job.Skills.Split(';'),
-                Benefits = string.IsNullOrEmpty(job.Benefits) ? Array.Empty<string>() : job.Benefits.Split(';'),
+                var job = await _unitOfWork.Job.Get(j => j.Id == id);
+                return job == null ? null : _mapper.Map<JobDto>(job);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving job with ID: {JobId}", id);
+                throw;
+            }
 
-            };
-            return Task.FromResult<JobDto?>(jobDto);
-
-
-            //return Task.FromResult(jobDto);
         }
 
-        public Task UpdateJobAsync(int id, UpdateJobDto dto)
+        public async Task UpdateJobAsync(int id, UpdateJobDto dto)
         {
-            var job = _unitOfWork.Job.Get(j => j.Id == id);
-            if (job == null) throw new Exception("Job not found");
-            if (!string.IsNullOrEmpty(dto.Title))
-                job.Title = dto.Title;
-            if (!string.IsNullOrEmpty(dto.Description))
-                job.Description = dto.Description;
-            if (dto.Requirements != null && dto.Requirements.Any())
-                job.Requirements = string.Join(";", dto.Requirements);
-            if (dto.Skills != null && dto.Skills.Any())
-                job.Skills = string.Join(";", dto.Skills);
-            if (dto.Benefits != null && dto.Benefits.Any())
-                job.Benefits = string.Join(";", dto.Benefits);
+            try
+            {
+                var job = await _unitOfWork.Job.Get(j => j.Id == id);
+                if (job == null)
+                    throw new KeyNotFoundException($"Job with id {id} not found");
 
+                // Use AutoMapper to update only non-null properties
+                var updatedJob = _mapper.Map(dto, job);
+                // Update timestamp
+                // updatedJob.UpdatedAt = DateTime.UtcNow;
 
-            _unitOfWork.Job.Update(job);
-            _unitOfWork.Save();
-            return Task.CompletedTask;
+                _unitOfWork.Job.Update(updatedJob);
+                await _unitOfWork.Save();
+
+                _logger.LogInformation("Job updated successfully with ID: {JobId}", id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating job with ID: {JobId}", id);
+                throw;
+            }
+
+        }
+        public async Task DeleteJobAsync(int id)
+        {
+            try
+            {
+                var job = await _unitOfWork.Job.Get(j => j.Id == id);
+                if (job == null)
+                    throw new KeyNotFoundException($"Job with id {id} not found");
+
+                _unitOfWork.Job.Remove(job);
+                await _unitOfWork.Save();
+
+                _logger.LogInformation("Job deleted successfully with ID: {JobId}", id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting job with ID: {JobId}", id);
+                throw;
+            }
         }
     }
 }

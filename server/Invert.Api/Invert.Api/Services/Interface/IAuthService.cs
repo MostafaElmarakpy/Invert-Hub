@@ -15,5 +15,6 @@ namespace Invert.Api.Services.Interface
         Task UpdateUserAsync(AppUser user);
         Task<string> GenerateJwtTokenAsync(AppUser user);
         Task<string> GenerateRefreshTokenAsync();
+        Task<bool> LogoutAsync(string userId, string RefreshToken);
     }
 }

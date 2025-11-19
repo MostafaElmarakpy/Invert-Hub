@@ -11,6 +11,14 @@ namespace Invert.Api.Entities
         public string Link { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
+        // Note: Add Status property to Project entity if needed
+        public string? Status { get; set; } = "Pending"; // e.g., Pending, Approved, Rejected
+        public DateTime? ApprovedAt { get; set; }
+
+        // ✅ NEW: Track project owner
+        public string? Owner { get; set; }      // Owner name
+        public string? UserId { get; set; }     // Link to AppUser
+        public virtual AppUser? AppUser { get; set; }
 
     }
 }

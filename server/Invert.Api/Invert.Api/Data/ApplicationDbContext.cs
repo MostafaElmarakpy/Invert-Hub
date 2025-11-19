@@ -18,6 +18,8 @@ namespace Invert.Api.Data
 
         public DbSet<Article> Articles { get; set; } = null!;
 
+        public DbSet<Notification> Notifications { get; set; } = null!;
+
         public DbSet<Job> Jobs { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -26,8 +28,33 @@ namespace Invert.Api.Data
 
             modelBuilder.Entity<AppUser>().HasIndex(u => u.UserName).IsUnique();
             modelBuilder.Entity<AppUser>().HasIndex(u => u.Email).IsUnique();
+            modelBuilder.Entity<AppUser>()
+               .HasIndex(u => u.UserName)
+               .IsUnique();
 
-            //modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+            modelBuilder.Entity<AppUser>()
+                .HasIndex(u => u.Email)
+                .IsUnique();
+
+            // ✅ NEW: Article indexes
+            modelBuilder.Entity<Article>()
+                .HasIndex(a => a.UserId);
+
+
+
+
+            // ✅ NEW: Project indexes
+            modelBuilder.Entity<Project>()
+                .HasIndex(p => p.UserId);
+
+            // ✅ NEW: Notification indexes
+            modelBuilder.Entity<Notification>()
+                .HasIndex(n => n.UserId);
+
+            modelBuilder.Entity<Notification>()
+                .HasIndex(n => new { n.UserId, n.IsRead });
+
+            modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
         }
     }
 }

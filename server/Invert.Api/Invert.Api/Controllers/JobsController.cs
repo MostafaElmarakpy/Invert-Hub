@@ -4,6 +4,7 @@ using Invert.Api.Dtos.Project;
 using Invert.Api.Services.Interface;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Invert.Api.Controllers;
 
@@ -12,8 +13,15 @@ namespace Invert.Api.Controllers;
 public class JobsController : ControllerBase
 {
     private readonly IJobService _service;
-    public JobsController(IJobService service) => _service = service;
+    private readonly IMemoryCache _cache;
+    private readonly ILogger<JobsController> _logger;
 
+    public JobsController(IJobService service, IMemoryCache cache, ILogger<JobsController> logger)
+    {
+        _service = service;
+        _cache = cache;
+        _logger = logger;
+    }
 
     [HttpGet]
     public async Task<IActionResult> GetAll()
@@ -28,16 +36,22 @@ public class JobsController : ControllerBase
     // [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Create([FromBody] CreateJobDto dto)
     {
-        // create job by JobService and add validation and exception handling
-
-        if (!ModelState.IsValid) return BadRequest(ModelState);
         try
         {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
             var jobId = await _service.CreateJobAsync(dto);
-            return Ok(new { JobId = jobId, Message = "Job created successfully." });
+
+             //Clear cache after creating new job
+            _cache.Remove("all_jobs");
+
+            return CreatedAtAction(nameof(GetById), new { id = jobId },
+                new { JobId = jobId, Message = "Job created successfully." });
         }
-        catch (Exception ex)            
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Error creating job");
             return BadRequest(ex.Message);
         }
 
@@ -47,49 +61,87 @@ public class JobsController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
-        var job = await _service.GetByIdAsync(id);
-        if (job == null) return NotFound();
-        return Ok(job);
+        try
+        {
+            var cacheKey = $"job_{id}";
+
+            if (!_cache.TryGetValue(cacheKey, out JobDto job))
+            {
+                job = await _service.GetByIdAsync(id);
+                if (job != null)
+                {
+                    _cache.Set(cacheKey, job, TimeSpan.FromMinutes(10));
+                }
+            }
+
+            if (job == null)
+                return NotFound($"Job with ID {id} not found");
+
+            return Ok(job);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving job with ID {JobId}", id);
+            return StatusCode(500, "Internal server error");
+        }
+
+
     }
 
     [HttpPut("{id}")]
     // [Authorize(Roles = "Admin")]
     public async Task<IActionResult>  Update(int id, [FromBody] UpdateJobDto dto)
     {
-        var existingJob = _service.GetByIdAsync(id);
-        if (existingJob == null) return NotFound();
-
-        if (ModelState.IsValid == false)
-        {
-            return BadRequest(ModelState);
-        }
         try
         {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            // FIX: Add await keyword here - this was the main issue causing the 400 error
+            var existingJob = await _service.GetByIdAsync(id);
+            if (existingJob == null)
+                return NotFound($"Job with ID {id} not found");
+
             await _service.UpdateJobAsync(id, dto);
-            return Ok("Job updated successfully.");
+
+            // Clear relevant cache entries
+            _cache.Remove($"job_{id}");
+            _cache.Remove("all_jobs");
+
+            return Ok(new { Message = "Job updated successfully." });
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error updating job with ID {JobId}", id);
             return BadRequest(ex.Message);
         }
     }
 
     [HttpDelete("{id}")]
     // [Authorize(Roles = "Admin")]
-    public async Task<IActionResult> Delete([FromBody] int id)
+    public async Task<IActionResult> Delete(int id)
     {
-
-        if (id == 0) return BadRequest("Id mismatch.");
         try
         {
+            if (id <= 0)
+                return BadRequest("Invalid job ID");
+
             await _service.DeleteJobAsync(id);
-            return Ok("Job deleted successfully.");
+
+            // Clear cache entries
+            _cache.Remove($"job_{id}");
+            _cache.Remove("all_jobs");
+
+            return Ok(new { Message = "Job deleted successfully." });
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound($"Job with ID {id} not found");
         }
         catch (Exception ex)
         {
-            return BadRequest(ex.Message);
+            _logger.LogError(ex, "Error deleting job with ID {JobId}", id);
+            return StatusCode(500, "Internal server error");
         }
     }
 }
-
-

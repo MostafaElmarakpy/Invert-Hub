@@ -22,16 +22,16 @@ namespace Invert.Api.Controllers
         public AuthController(IAuthService authService, UserManager<AppUser> userManager)
         {
             _authService = authService;
-            // _userManager = userManager;
+            _userManager = userManager;
         }
 
         [HttpPost("login")]
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody] LoginDto loginDto)
         {
+            if (!ModelState.IsValid) return BadRequest(ModelState);
             try
             {
-                if (!ModelState.IsValid) return BadRequest(ModelState);
 
                 var user = await _userManager.FindByEmailAsync(loginDto.Email);
 
@@ -42,13 +42,17 @@ namespace Invert.Api.Controllers
                 if (!result) return BadRequest(new { Message = "Password is incorrect" });
                 //generate token
 
+                var token = await _authService.GenerateJwtTokenAsync(user);
 
+                // var refreshToken = await _authService.GenerateAndStoreRefreshTokenAsync(user.Id);
 
                 return Ok(new UserDto
                 {
                     DisplayName = user.UserName,
                     Email = user.Email,
-                    Token = " ",
+                    Token = token,
+                    // RefreshToken = ""
+
                 });
 
             }
@@ -82,12 +86,37 @@ namespace Invert.Api.Controllers
 
                 await _authService.CreateUserAsync(user, registerDto.Password);
 
+                // var refreshToken = await _authService.GenerateRefreshTokenAsync(user.Id);
+                var token = await _authService.GenerateJwtTokenAsync(user);
+
                 return Ok(new UserDto
                 {
                     DisplayName = user.UserName,
                     Email = user.Email,
-                    Token = " ",
+                    Token = token,
+                    RefreshToken = ""
                 });
+            }
+            catch (Exception ex)
+            {
+                return Problem(ex.Message);
+            }
+        }
+        [Authorize]
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+                var refreshToken = Request.Headers["RefreshToken"].ToString();
+
+                var result = await _authService.LogoutAsync(userId, refreshToken);
+                if (!result)
+                {
+                    return BadRequest(new { Message = "Logout failed" });
+                }
+                return Ok(new { Message = "Logout successful" });
             }
             catch (Exception ex)
             {
